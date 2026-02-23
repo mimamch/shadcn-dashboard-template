@@ -34,7 +34,7 @@ export default function AuthenticationPage() {
               className="absolute inset-0 h-full w-full object-cover"
               width={1200}
               height={1200}
-              loading="lazy"
+              loading="eager"
             />
           </div>
           <div className="relative z-20 flex items-center text-lg font-medium text-primary-foreground">
