@@ -57,6 +57,7 @@ import {
 } from "../ui/collapsible";
 import React from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
+import Link from "next/link";
 
 const data = {
   user: {
@@ -460,9 +461,11 @@ function NavUser({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <LogOut />
-                Log out
+              <DropdownMenuItem asChild>
+                <Link href="/auth/login">
+                  <LogOut />
+                  Log out
+                </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
