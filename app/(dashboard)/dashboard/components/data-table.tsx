@@ -51,11 +51,13 @@ import {
   VisibilityState,
 } from "@tanstack/react-table";
 import {
+  CheckIcon,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  ChevronsUpDownIcon,
   CircleCheckIcon,
   Columns3Icon,
   GripVerticalIcon,
@@ -99,6 +101,20 @@ import {
 } from "@/components/ui/drawer";
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 import { Separator } from "@/components/ui/separator";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 
 export const schema = z.object({
   id: z.number(),
@@ -129,6 +145,12 @@ function DragHandle({ id }: { id: number }) {
     </Button>
   );
 }
+
+type UpdateCell = <K extends keyof z.infer<typeof schema>>(
+  id: string,
+  field: K,
+  value: z.infer<typeof schema>[K],
+) => Promise<void> | void;
 
 const columns: ColumnDef<z.infer<typeof schema>>[] = [
   {
@@ -248,12 +270,27 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
   {
     accessorKey: "reviewer",
     header: "Reviewer",
-    cell: ({ row }) => {
+    cell: ({ row, table }) => {
       const isAssigned = row.original.reviewer !== "Assign reviewer";
 
-      if (isAssigned) {
-        return row.original.reviewer;
-      }
+      const STATUS_OPTIONS: SelectOption[] = [
+        { value: "Eddie Lake", label: "Eddie Lake" },
+        { value: "Jamik Tashpulatov", label: "Jamik Tashpulatov" },
+      ];
+
+      return (
+        <CellCommandSelect
+          value={!isAssigned ? undefined : row.original.reviewer}
+          onChange={(val) => {
+            if (row.original.reviewer === val) return;
+            const updateCell = (
+              table.options.meta as Record<string, UpdateCell>
+            )?.updateCell as UpdateCell | undefined;
+            updateCell?.(row.original.id.toString(), "reviewer", val);
+          }}
+          options={STATUS_OPTIONS}
+        />
+      );
 
       return (
         <>
@@ -382,6 +419,25 @@ export function DataTable({
     getSortedRowModel: getSortedRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
+
+    /**
+     * custom meta
+     */
+    meta: {
+      updateCell: async <K extends keyof z.infer<typeof schema>>(
+        id: string,
+        field: K,
+        value: z.infer<typeof schema>[K],
+      ) => {
+        setData((data) => {
+          const index = data.findIndex((item) => item.id.toString() === id);
+          if (index === -1) return data;
+          const updated = [...data];
+          updated[index] = { ...updated[index], [field]: value };
+          return updated;
+        });
+      },
+    },
   });
 
   function handleDragEnd(event: DragEndEvent) {
@@ -797,5 +853,110 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
         </DrawerFooter>
       </DrawerContent>
     </Drawer>
+  );
+}
+
+export interface SelectOption {
+  label: string;
+  value: string;
+  icon?: React.ReactNode;
+}
+interface CellCommandSelectProps {
+  /** Current cell value */
+  value?: string | undefined;
+  /** Callback when user selects a new option */
+  onChange: (value: string) => void;
+  /** List of available options */
+  options: SelectOption[];
+  /** Custom render for selected value (optional) */
+  renderValue?: (option: SelectOption | undefined) => React.ReactNode;
+  /** Placeholder label for dropdown */
+  placeholder?: string;
+}
+
+export function CellCommandSelect({
+  value,
+  onChange,
+  options,
+  renderValue,
+  placeholder = "Select value...",
+}: CellCommandSelectProps) {
+  const [open, setOpen] = React.useState(false);
+
+  const selectedOption = options.find((o) => o.value === value);
+
+  const handleSelect = (selected: string) => {
+    onChange(selected);
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            "h-7 w-45 justify-between gap-1 px-2 text-sm font-normal",
+            "hover:bg-accent/60 data-[state=open]:bg-accent/60",
+            // Remove default border, looks like a normal cell until hovered
+            "border border-transparent hover:border-border data-[state=open]:border-border",
+          )}
+        >
+          <span className="flex items-center gap-1.5 overflow-hidden">
+            {renderValue ? (
+              renderValue(selectedOption)
+            ) : selectedOption ? (
+              <>
+                {selectedOption?.icon && <span>{selectedOption.icon}</span>}
+                <span className="truncate">
+                  {selectedOption?.label ?? value}
+                </span>
+              </>
+            ) : (
+              <span className="text-muted-foreground">{placeholder}</span>
+            )}
+          </span>
+          <ChevronsUpDownIcon className="size-3 shrink-0 opacity-40" />
+        </Button>
+      </PopoverTrigger>
+
+      <PopoverContent className="w-45 p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search..." className="h-8 text-sm" />
+          <CommandList>
+            <CommandEmpty>No results found.</CommandEmpty>
+            <CommandGroup>
+              {options.map((option) => {
+                const isSelected = option.value === value;
+                return (
+                  <CommandItem
+                    key={option.value}
+                    value={option.value}
+                    onSelect={handleSelect}
+                    className="text-sm"
+                  >
+                    {/* Check indicator */}
+                    <CheckIcon
+                      className={cn(
+                        "mr-2 size-3.5 shrink-0",
+                        isSelected ? "opacity-100 text-primary" : "opacity-0",
+                      )}
+                    />
+
+                    {option.icon && (
+                      <span className="mr-1.5">{option.icon}</span>
+                    )}
+
+                    {option.label}
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
